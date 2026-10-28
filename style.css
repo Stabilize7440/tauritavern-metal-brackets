@@ -1,0 +1,61 @@
+/*
+ * 金属括号强调 —— 朱砂色斜向扫描渐变
+ *
+ * 两个必须注意的 CSS 陷阱（都踩过）：
+ *
+ * 1. 必须写 background-image，不能用 background 简写。
+ *    background 简写会把 background-clip 重置回 border-box，
+ *    结果整段文字变成一块彩色矩形。
+ *
+ * 2. 必须显式 text-shadow: none。
+ *    很多主题（包括常见的「双色盒子」）用 text-shadow: 0 0 0 <深色>
+ *    来表达「无阴影」，这实际是在字形同一位置盖一层实心暗色。
+ *    渲染顺序是「背景 → text-shadow → 文字填充」，
+ *    background-clip: text 用的是背景层，会被这层实心投影整个压暗，
+ *    渐变全变成一片深灰。
+ *
+ * 3. background-size 用 em 而不是 px。
+ *    2em / 3em 的周期会跟着字号缩放，换字号不用重新调；
+ *    1.5em 以下会出现每个字一个周期，碎成噪点。
+ */
+
+.tt-metal {
+    background-image: linear-gradient(
+        115deg,
+        #ffd9d0 0%,
+        #e05058 26%,
+        #8e1a20 44%,
+        #6b1218 50%,
+        #b83038 56%,
+        #ff9d90 74%,
+        #ffd9d0 100%
+    );
+    background-size: 3em 100%;
+    background-repeat: repeat-x;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow: none !important;
+    font-weight: 600;
+}
+
+/* 渐变文字依赖 background-clip，打印和强制高对比模式下会退化成透明，
+   这里兜底成纯色，至少还能看 */
+@media print {
+    .tt-metal {
+        background-image: none;
+        -webkit-text-fill-color: currentColor;
+        color: inherit;
+        font-weight: 700;
+    }
+}
+
+@media (forced-colors: active) {
+    .tt-metal {
+        background-image: none;
+        -webkit-text-fill-color: currentColor;
+        color: inherit;
+        font-weight: 700;
+    }
+}
