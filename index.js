@@ -29,6 +29,7 @@ const SETTINGS_KEY = 'tt_metal_brackets';
 const STYLE_ID = 'tt-metal-brackets-style';
 const MARK_ATTR = 'data-tt-metal';
 const BRACKET_ATTR = 'data-tt-bracket';
+const RULE_ATTR = 'data-tt-rule';
 const TAG = '[MetalBrackets]';
 
 /** 处理时跳过的祖先元素。mark 本身也跳过，保证幂等 */
@@ -103,7 +104,9 @@ const escapeCharClass = (s) => String(s).replace(/[\\\]^*-]/g, '\\$&');
  * @returns {{ re: RegExp, rules: Array<{open: string, close: string, style: string}> } | null}
  */
 function compileRules(rules, maxLength) {
-    const valid = rules.filter((r) => r && r.open && r.close && r.open !== r.close);
+    const valid = rules
+        .map((r, index) => (r ? { ...r, index } : null))
+        .filter((r) => r && r.open && r.close && r.open !== r.close);
     if (valid.length === 0) return null;
 
     // 开符号长的排前面，避免 【 抢走 【【 的匹配
@@ -167,6 +170,8 @@ function transformBrackets(html, cfg = getSettings()) {
 
             const span = doc.createElement('span');
             span.setAttribute(MARK_ATTR, rule.style || 'cinnabar');
+            // 记住原始规则序号，切样式时可以只改属性、不重渲染
+            span.setAttribute(RULE_ATTR, String(rule.index));
 
             const openMark = doc.createElement('span');
             openMark.setAttribute(BRACKET_ATTR, '');
@@ -378,11 +383,28 @@ function refreshStyle() {
     injectStyle(getSettings());
 }
 
-/** 重建样式 + 整个聊天重渲染：只有符号规则和启用状态需要 */
+/**
+ * 只换样式名：直接改 DOM 上的 data 属性，一帧内生效，不重渲染任何消息。
+ * 因为颜色全部由 [data-tt-metal="xxx"] 选择器决定，换 key 就够了。
+ * @param {number} ruleIndex 规则的原始序号
+ * @param {string} styleKey
+ */
+function hotSwapRuleStyle(ruleIndex, styleKey) {
+    for (const el of document.querySelectorAll(`[${RULE_ATTR}="${ruleIndex}"]`)) {
+        el.setAttribute(MARK_ATTR, styleKey);
+    }
+}
+
+/**
+ * 重建样式 + 整个聊天重渲染。只有符号字符、启用状态变化需要。
+ *
+ * 注意 import 路径：本文件在 /scripts/extensions/third-party/<name>/，
+ * 往上四层才是网站根目录，script.js 在根目录（extensions.js 在 /scripts/ 下，只需三层）。
+ */
 async function refreshAll() {
     refreshStyle();
     try {
-        const { reloadCurrentChat } = await import('../../../script.js');
+        const { reloadCurrentChat } = await import('../../../../script.js');
         await reloadCurrentChat();
     } catch (error) {
         console.error(TAG, '重渲染聊天失败，请手动刷新页面。', error);
@@ -450,12 +472,15 @@ function bindPanel() {
         refreshStyle();
     });
 
-    // 符号编辑：改完要重渲染，用 change 而不是 input，避免打字过程中反复重载
-    $('#tt_metal_rules').on('change input', 'select', async function () {
+    // 改样式名：纯热切换，直接改 DOM 属性，不重渲染
+    $('#tt_metal_rules').on('change', 'select', function () {
         const i = Number($(this).closest('.tt-rule').attr('data-index'));
-        getSettings().rules[i].style = $(this).val();
+        const styleKey = $(this).val();
+        const rule = getSettings().rules[i];
+        if (!rule) return;
+        rule.style = styleKey;
         saveSettings();
-        await refreshAll();
+        hotSwapRuleStyle(i, styleKey);
     });
 
     $('#tt_metal_rules').on('change', 'input.tt-sym', async function () {

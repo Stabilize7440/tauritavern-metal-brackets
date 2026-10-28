@@ -63,8 +63,13 @@
 
 | 改了 | 生效 |
 |---|---|
+| **样式名**（朱砂→青玉） | **立即**，只改 DOM 上的 `data-tt-metal` 值，零重渲染 |
 | 颜色 / 角度 / 周期 / 字重 / 长度上限 / 括号显隐 | **立即**，重新生成样式表，零重渲染 |
-| 符号规则 / 启用开关 | `reloadCurrentChat()` 重渲染整个聊天 |
+| 符号字符 / 启用开关 | `reloadCurrentChat()` 重渲染整个聊天 |
+
+样式能热切换是因为颜色完全由 `[data-tt-metal="xxx"]` 选择器决定 ——
+每个强调元素还带一个 `data-tt-rule` 记住自己属于第几条规则，
+换样式时把属性值改掉就够了，节点本身不用动。
 
 ## 为什么不用「正则」扩展
 
@@ -93,7 +98,7 @@ SillyTavern 自己的引号处理正则都显式写了 `` ```...``` `` 排除，
 
 **已知不处理**：`【<strong>强调</strong>道具】` 这种符号和被包内容跨了 HTML 标签的情况 —— `【` 和 `】` 落在不同文本节点里，逐节点扫描看不到完整的一对。正常写作里极少出现。
 
-## ⚠️ 四个坑
+## ⚠️ 五个坑
 
 都是调试时实际撞到过的，改代码之前先看这个。
 
@@ -140,7 +145,20 @@ text-shadow: rgb(34, 34, 34) 0px 0px 0px;
 
 这是在字形同一位置盖一层模糊半径为 0 的**实心暗色**。渲染顺序是「背景 → text-shadow → 文字填充」，而 `background-clip: text` 用的是背景层，会被这层实心投影整个压暗 —— 所有渐变都变成一片深灰。
 
-### 4. 流式渲染会换容器
+### 4. import `script.js` 要往上四层
+
+本扩展在 `/scripts/extensions/third-party/<name>/index.js`：
+
+| 目标 | 路径 |
+|---|---|
+| `/scripts/extensions.js` | `../../../extensions.js` |
+| `/scripts/message-formatter.js` | `../../../message-formatter.js` |
+| `/script.js`（根目录！） | `../../../../script.js` |
+
+`script.js` 不在 `/scripts/` 下，少上一层的后果是 import 404 被 catch 吞掉，
+表现为「改符号规则没反应」但控制台只有一行不起眼的 error。
+
+### 5. 流式渲染会换容器
 
 JS-Slash-Runner 流式输出时给 `.mes_text` 加 `display: none !important`，另外插入一个 `<div class="TH-streaming">`。任何挂在 `.mes_text` 上的规则在流式期间会全部失效。
 
