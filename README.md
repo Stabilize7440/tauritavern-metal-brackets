@@ -61,10 +61,11 @@ SillyTavern 自己的引号处理正则都显式写了 `` ```...``` `` 排除，
 
 ## 调样式
 
-`style.css` 里的几个旋钮：
+样式内联在 `index.js` 顶部的 `CSS` 常量里（没有独立 style.css，原因见下面的陷阱 3）：
 
 ```css
-.tt-metal {
+.tt-metal,
+.custom-tt-metal {
     /* 换颜色：改这条渐变的色标 */
     background-image: linear-gradient(115deg, #ffd9d0 0%, #e05058 26%, ...);
 
@@ -80,9 +81,9 @@ SillyTavern 自己的引号处理正则都显式写了 `` ```...``` `` 排除，
 
 改渐变色标时注意保持「亮 → 暗 → 亮」的节奏，这是金属反光的来源。全亮会像荧光笔，全暗会融进深色背景。
 
-## ⚠️ 两个 CSS 陷阱
+## ⚠️ 三个坑
 
-写这套样式时踩到的，改的时候别踩回去：
+写这套东西时踩到的，改的时候别踩回去：
 
 **1. 必须用 `background-image`，不能用 `background` 简写**
 
@@ -107,6 +108,36 @@ text-shadow: rgb(34, 34, 34) 0px 0px 0px;
 ```
 
 这是在字形同一位置盖一层模糊半径为 0 的**实心暗色**。渲染顺序是「背景 → text-shadow → 文字填充」，而 `background-clip: text` 用的是背景层，会被这层实心投影整个压暗 —— 所有渐变都变成一片深灰。
+
+**3. class 会被 SillyTavern 加上 `custom-` 前缀**
+
+`scripts/chats.js:1918` 的 `uponSanitizeAttribute` 钩子：
+
+```js
+case 'class': {
+    data.attrValue = data.attrValue.split(' ').map((v) => {
+        if (v.startsWith('fa-') || v.startsWith('note-') || v === 'monospace') return v;
+        return 'custom-' + v;      // ← tt-metal 变成 custom-tt-metal
+    }).join(' ');
+}
+```
+
+`afterMarkdown` 钩子跑在 `DOMPurify.sanitize()` **之前**，所以 JS 里写下的 `class="tt-metal"` 到了 DOM 里会变成 `class="custom-tt-metal"`。
+
+症状很有迷惑性：**括号消失了但颜色没变** —— 因为文本已经被改写（钩子生效了），只是 CSS 选择器全落空。
+
+所以选择器必须写两份：
+
+```css
+.tt-metal,
+.custom-tt-metal { ... }
+```
+
+同理，JS 里判断「是否已处理过」的跳过选择器也要带上 `.custom-tt-metal`。
+
+## 为什么 CSS 内联在 JS 里
+
+不依赖 manifest 的 `css` 字段，减少一条可能失效的加载路径 —— 出问题时只需要怀疑 JS 一处。样式就 40 行，内联的维护成本可以接受。
 
 ## 许可
 
